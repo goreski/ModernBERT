@@ -92,6 +92,10 @@ def create_eval_dataset(
         download_config=download_config,
     )
 
+    # Print one example to show the structure of the dataset
+    print(f"Example from {dataset_name} dataset:")
+    print(dataset[0])
+
     log.info(f"Starting tokenization by preprocessing over {num_workers} threads!")
     text_column_names = task_column_names[task]
 
