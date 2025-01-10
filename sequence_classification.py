@@ -31,6 +31,7 @@ from omegaconf import DictConfig
 from omegaconf import OmegaConf as om
 from torch.utils.data import DataLoader
 import torch
+import pandas as pd
 
 
 def update_batch_size_info(cfg: DictConfig):
