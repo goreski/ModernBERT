@@ -30,6 +30,7 @@ from composer.utils import dist, reproducibility
 from omegaconf import DictConfig
 from omegaconf import OmegaConf as om
 from torch.utils.data import DataLoader
+import torch
 
 
 def update_batch_size_info(cfg: DictConfig):
@@ -146,14 +147,71 @@ def build_optimizer(cfg, model):
         raise ValueError(f"Not sure how to build optimizer: {cfg.name}")
 
 
+# def build_my_dataloader(cfg: DictConfig, device_batch_size: int):
+#     """Create a dataloader for classification.
+
+#     **Modify this function to train on your own dataset!**
+
+#     This function is provided as a starter code to simplify fine-tuning a BERT
+#     classifier on your dataset. We'll use the dataset for QNLI (one of the
+#     GLUE tasks) as a demonstration.
+
+#     Args:
+#         cfg (DictConfig): An omegaconf config that houses all the configuration
+#             variables needed to instruct dataset/dataloader creation.
+#         device_batch_size (int): The size of the batches that the dataloader
+#             should produce.
+
+#     Returns:
+#         dataloader: A dataloader set up for use of the Composer Trainer.
+#     """
+#     # As a demonstration, we're using the QNLI dataset from the GLUE suite
+#     # of tasks.
+#     #
+#     # Note: We create our dataset using the `data_module.create_glue_dataset` utility
+#     #   defined in `./src/glue/data.py`. If you inspect that code, you'll see
+#     #   that we're taking some extra steps so that our dataset yields examples
+#     #   that follow a particular format. In particular, the raw text is
+#     #   tokenized and some of the data columns are removed. The result is that
+#     #   each example is a dictionary with the following:
+#     #
+#     #     - 'input_ids': the tokenized raw text
+#     #     - 'label': the target class that the text belongs to
+#     #     - 'attention_mask': a list of 1s and 0s to indicate padding
+#     #
+#     # When you set up your own dataset, it should handle tokenization to yield
+#     # examples with a similar structure!
+#     #
+#     # REPLACE THIS WITH YOUR OWN DATASET:
+#     dataset = data_module.create_glue_dataset(
+#         task="qnli",
+#         split=cfg.split,
+#         tokenizer_name=cfg.tokenizer_name,
+#         max_seq_length=cfg.max_seq_len,
+#     )
+
+#     dataset = cast(Dataset, dataset)
+#     dataloader = DataLoader(
+#         dataset,
+#         # As an alternative to formatting the examples inside the dataloader,
+#         # you can write a custom data collator to do that instead.
+#         collate_fn=transformers.default_data_collator,
+#         batch_size=device_batch_size,
+#         sampler=dist.get_sampler(dataset, drop_last=cfg.drop_last, shuffle=cfg.shuffle),
+#         num_workers=cfg.num_workers,
+#         pin_memory=cfg.get("pin_memory", True),
+#         prefetch_factor=cfg.get("prefetch_factor", 2),
+#         persistent_workers=cfg.get("persistent_workers", True),
+#         timeout=cfg.get("timeout", 0),
+#     )
+
+#     return dataloader
+
 def build_my_dataloader(cfg: DictConfig, device_batch_size: int):
     """Create a dataloader for classification.
 
-    **Modify this function to train on your own dataset!**
-
     This function is provided as a starter code to simplify fine-tuning a BERT
-    classifier on your dataset. We'll use the dataset for QNLI (one of the
-    GLUE tasks) as a demonstration.
+    classifier on your dataset.
 
     Args:
         cfg (DictConfig): An omegaconf config that houses all the configuration
@@ -164,39 +222,49 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int):
     Returns:
         dataloader: A dataloader set up for use of the Composer Trainer.
     """
-    # As a demonstration, we're using the QNLI dataset from the GLUE suite
-    # of tasks.
-    #
-    # Note: We create our dataset using the `data_module.create_glue_dataset` utility
-    #   defined in `./src/glue/data.py`. If you inspect that code, you'll see
-    #   that we're taking some extra steps so that our dataset yields examples
-    #   that follow a particular format. In particular, the raw text is
-    #   tokenized and some of the data columns are removed. The result is that
-    #   each example is a dictionary with the following:
-    #
-    #     - 'input_ids': the tokenized raw text
-    #     - 'label': the target class that the text belongs to
-    #     - 'attention_mask': a list of 1s and 0s to indicate padding
-    #
-    # When you set up your own dataset, it should handle tokenization to yield
-    # examples with a similar structure!
-    #
-    # REPLACE THIS WITH YOUR OWN DATASET:
-    dataset = data_module.create_glue_dataset(
-        task="qnli",
-        split=cfg.split,
-        tokenizer_name=cfg.tokenizer_name,
-        max_seq_length=cfg.max_seq_len,
+    # Download German Credit Data from UCI Machine Learning Repository
+    url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/statlog/german/german.data'
+    df = pd.read_csv(url, sep=' ', header=None)
+
+    # Convert dataset to Glue structure
+    df['question'] = 'Is the credit worthiness of the person bad?'
+    df['sentence'] = df.apply(lambda row: ' '.join([str(x) for x in row[:-2]]), axis=1)
+    df['label'] = df[20].apply(lambda x: 1 if x == 2 else 0)
+    df['idx'] = df.index
+    df = df[['question', 'sentence', 'label', 'idx']]
+
+    # Tokenize the dataset
+    tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.tokenizer_name)
+    tokenized_dataset = tokenizer(
+        df['sentence'].tolist(),
+        padding=True,
+        truncation=True,
+        max_length=cfg.max_seq_len,
+        return_tensors='pt'
     )
 
-    dataset = cast(Dataset, dataset)
+    # Create a PyTorch dataset
+    class CustomDataset(torch.utils.data.Dataset):
+        def __init__(self, encodings, labels):
+            self.encodings = encodings
+            self.labels = labels
+
+        def __getitem__(self, idx):
+            item = {key: val[idx] for key, val in self.encodings.items()}
+            item['labels'] = torch.tensor(self.labels[idx])
+            return item
+
+        def __len__(self):
+            return len(self.labels)
+
+    labels = df['label'].tolist()
+    custom_dataset = CustomDataset(tokenized_dataset, labels)
+
+    # Create a DataLoader
     dataloader = DataLoader(
-        dataset,
-        # As an alternative to formatting the examples inside the dataloader,
-        # you can write a custom data collator to do that instead.
-        collate_fn=transformers.default_data_collator,
+        custom_dataset,
         batch_size=device_batch_size,
-        sampler=dist.get_sampler(dataset, drop_last=cfg.drop_last, shuffle=cfg.shuffle),
+        sampler=dist.get_sampler(custom_dataset, drop_last=cfg.drop_last, shuffle=cfg.shuffle),
         num_workers=cfg.num_workers,
         pin_memory=cfg.get("pin_memory", True),
         prefetch_factor=cfg.get("prefetch_factor", 2),
@@ -205,7 +273,6 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int):
     )
 
     return dataloader
-
 
 def build_model(cfg: DictConfig):
     # Note: cfg.num_labels should match the number of classes in your dataset!

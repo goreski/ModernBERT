@@ -94,7 +94,9 @@ def create_eval_dataset(
 
     # Print one example to show the structure of the dataset
     print(f"Example from {dataset_name} dataset:")
-    print(dataset[0])
+    # Print first five examples
+    for i in range(5):
+        print(dataset[i])
 
     log.info(f"Starting tokenization by preprocessing over {num_workers} threads!")
     text_column_names = task_column_names[task]

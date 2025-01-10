@@ -10,6 +10,9 @@ bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda
 # Initialize Miniconda
 source $HOME/miniconda/bin/activate
 
+# Add Miniconda to the PATH
+export PATH="$HOME/miniconda/bin:$PATH"
+
 # Verify the installation
 conda --version
 
