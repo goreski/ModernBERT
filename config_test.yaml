@@ -1,0 +1,24 @@
+method: grid
+parameters:
+  n_samples:
+    values: [100, 200]
+  n_continuous_features:
+    values: [10]
+  n_discrete_features:
+    values: [10]
+  n_classes:
+    values: [2]
+  class_distribution:
+    values: [[0.7, 0.3]]
+  n_bins:
+    values: [5]
+  n_redundant:
+    values: [5]
+  n_noisy:
+    values: [10]
+  class_sep:
+    values: [0.1]
+  model_name:
+    values: [modernbert]
+
+program: train_models.py

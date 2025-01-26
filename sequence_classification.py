@@ -33,6 +33,8 @@ from torch.utils.data import DataLoader
 import torch
 import pandas as pd
 
+# Import the synthetic data generation function
+from generate_dataset import generate_synthetic_dataset
 
 def update_batch_size_info(cfg: DictConfig):
     global_batch_size, device_microbatch_size = cfg.global_train_batch_size, cfg.device_train_microbatch_size
@@ -148,101 +150,61 @@ def build_optimizer(cfg, model):
         raise ValueError(f"Not sure how to build optimizer: {cfg.name}")
 
 
-# def build_my_dataloader(cfg: DictConfig, device_batch_size: int):
-#     """Create a dataloader for classification.
-
-#     **Modify this function to train on your own dataset!**
-
-#     This function is provided as a starter code to simplify fine-tuning a BERT
-#     classifier on your dataset. We'll use the dataset for QNLI (one of the
-#     GLUE tasks) as a demonstration.
-
-#     Args:
-#         cfg (DictConfig): An omegaconf config that houses all the configuration
-#             variables needed to instruct dataset/dataloader creation.
-#         device_batch_size (int): The size of the batches that the dataloader
-#             should produce.
-
-#     Returns:
-#         dataloader: A dataloader set up for use of the Composer Trainer.
-#     """
-#     # As a demonstration, we're using the QNLI dataset from the GLUE suite
-#     # of tasks.
-#     #
-#     # Note: We create our dataset using the `data_module.create_glue_dataset` utility
-#     #   defined in `./src/glue/data.py`. If you inspect that code, you'll see
-#     #   that we're taking some extra steps so that our dataset yields examples
-#     #   that follow a particular format. In particular, the raw text is
-#     #   tokenized and some of the data columns are removed. The result is that
-#     #   each example is a dictionary with the following:
-#     #
-#     #     - 'input_ids': the tokenized raw text
-#     #     - 'label': the target class that the text belongs to
-#     #     - 'attention_mask': a list of 1s and 0s to indicate padding
-#     #
-#     # When you set up your own dataset, it should handle tokenization to yield
-#     # examples with a similar structure!
-#     #
-#     # REPLACE THIS WITH YOUR OWN DATASET:
-#     dataset = data_module.create_glue_dataset(
-#         task="qnli",
-#         split=cfg.split,
-#         tokenizer_name=cfg.tokenizer_name,
-#         max_seq_length=cfg.max_seq_len,
-#     )
-
-#     dataset = cast(Dataset, dataset)
-#     dataloader = DataLoader(
-#         dataset,
-#         # As an alternative to formatting the examples inside the dataloader,
-#         # you can write a custom data collator to do that instead.
-#         collate_fn=transformers.default_data_collator,
-#         batch_size=device_batch_size,
-#         sampler=dist.get_sampler(dataset, drop_last=cfg.drop_last, shuffle=cfg.shuffle),
-#         num_workers=cfg.num_workers,
-#         pin_memory=cfg.get("pin_memory", True),
-#         prefetch_factor=cfg.get("prefetch_factor", 2),
-#         persistent_workers=cfg.get("persistent_workers", True),
-#         timeout=cfg.get("timeout", 0),
-#     )
-
-#     return dataloader
-
-def build_my_dataloader(cfg: DictConfig, device_batch_size: int):
-    """Create a dataloader for classification.
-
-    This function is provided as a starter code to simplify fine-tuning a BERT
-    classifier on your dataset.
+def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points: int = 7):
+    """Create a dataloader for classification using synthetically generated data.
 
     Args:
         cfg (DictConfig): An omegaconf config that houses all the configuration
             variables needed to instruct dataset/dataloader creation.
         device_batch_size (int): The size of the batches that the dataloader
             should produce.
+        decimal_points (int): Number of decimal points to keep when converting to strings.
 
     Returns:
         dataloader: A dataloader set up for use of the Composer Trainer.
     """
-    # Download German Credit Data from UCI Machine Learning Repository
-    url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/statlog/german/german.data'
-    df = pd.read_csv(url, sep=' ', header=None)
+    # Generate the synthetic dataset
+    df = generate_synthetic_dataset(
+        n_samples=cfg.get("n_samples", 100),
+        n_continuous_features=cfg.get("n_continuous_features", 15),
+        n_discrete_features=cfg.get("n_discrete_features", 15),
+        n_classes=cfg.get("n_classes", 2),
+        class_distribution=cfg.get("class_distribution", [0.8, 0.2]),
+        n_bins=cfg.get("n_bins", 10),
+        n_redundant=cfg.get("n_redundant", 5),
+        n_noisy=cfg.get("n_noisy", 20),
+        class_sep=cfg.get("class_sep", 0.1),
+    )
 
-    # Convert dataset to Glue structure
-    df['question'] = 'Is the credit worthiness of the person bad?'
-    df['sentence'] = df.apply(lambda row: ' '.join([str(x) for x in row[:-2]]), axis=1)
-    df['label'] = df[20].apply(lambda x: 1 if x == 2 else 0)
+    # Change structure to "sentence", "label" and "idx"
+    # all columns except the last one are features and they are concatenated to form a sentence
+    # the last column is the label
+    df['sentence'] = df.drop(columns=['label']).apply(lambda x: ' '.join([f"{val:.{decimal_points}f}" for val in x]), axis=1)
+    
+    # Create dummy sentence based on label if 1 than A1 if 0 than B0
+    df['sentence'] = df['label'].apply(lambda x: f"A{x}" if x == 1 else f"B{x}")
+    
+    df = df[['sentence', 'label']]
     df['idx'] = df.index
-    df = df[['question', 'sentence', 'label', 'idx']]
 
     # Tokenize the dataset
     tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.tokenizer_name)
+    
+    # Add a padding token if it doesn't already exist
+    if tokenizer.pad_token is None:
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        tokenizer.pad_token_id = tokenizer.eos_token_id  # Use EOS token as padding token for GPT-2
+
     tokenized_dataset = tokenizer(
-        df['sentence'].tolist(),
+        df['sentence'].tolist(),  # Ensure this is a list of strings
         padding=True,
         truncation=True,
         max_length=cfg.max_seq_len,
         return_tensors='pt'
     )
+
+    # Print the first tokenized sentence
+    print(tokenized_dataset['input_ids'][0])
 
     # Create a PyTorch dataset
     class CustomDataset(torch.utils.data.Dataset):
@@ -276,9 +238,17 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int):
     return dataloader
 
 def build_model(cfg: DictConfig):
+    # Get tokenizer first to set up padding token
+    tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.tokenizer_name)
+    
+    # Add padding token to tokenizer if it doesn't exist
+    if tokenizer.pad_token is None:
+        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+        tokenizer.pad_token_id = tokenizer.eos_token_id  # Use EOS token as padding token for GPT-2
+
     # Note: cfg.num_labels should match the number of classes in your dataset!
     if cfg.name == "hf_bert":
-        return hf_bert_module.create_hf_bert_classification(
+        model = hf_bert_module.create_hf_bert_classification(
             num_labels=cfg.num_labels,
             pretrained_model_name=cfg.pretrained_model_name,
             use_pretrained=cfg.get("use_pretrained", False),
@@ -287,7 +257,7 @@ def build_model(cfg: DictConfig):
             gradient_checkpointing=cfg.get("gradient_checkpointing"),
         )
     elif cfg.name == "mosaic_bert":
-        return mosaic_bert_module.create_mosaic_bert_classification(
+        model = mosaic_bert_module.create_mosaic_bert_classification(
             num_labels=cfg.num_labels,
             pretrained_model_name=cfg.pretrained_model_name,
             pretrained_checkpoint=cfg.get("pretrained_checkpoint"),
@@ -296,7 +266,7 @@ def build_model(cfg: DictConfig):
             gradient_checkpointing=cfg.get("gradient_checkpointing"),
         )
     elif cfg.name == "flex_bert":
-        return flex_bert_module.create_flex_bert_classification(
+        model = flex_bert_module.create_flex_bert_classification(
             num_labels=cfg.num_labels,
             pretrained_model_name=cfg.pretrained_model_name,
             pretrained_checkpoint=cfg.get("pretrained_checkpoint"),
@@ -307,6 +277,14 @@ def build_model(cfg: DictConfig):
     else:
         raise ValueError(f"Not sure how to build model with name={cfg.name}")
 
+    # Set the pad_token_id in the model configuration if using GPT-2
+    if cfg.tokenizer_name == "gpt2":
+        model.config.pad_token_id = tokenizer.pad_token_id
+        model.model.config.pad_token_id = tokenizer.pad_token_id
+        # Resize model embeddings to match tokenizer
+        model.model.resize_token_embeddings(len(tokenizer))
+
+    return model
 
 def train(cfg: DictConfig, return_trainer: bool = False, do_train: bool = True) -> Optional[Trainer]:
     print("Training using config: ")

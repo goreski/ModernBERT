@@ -15,7 +15,7 @@ from generate_dataset import generate_synthetic_dataset
 wandb.init(project="nn_classification")
 
 # Generate the dataset
-n_samples = 1000
+n_samples = 100
 n_continuous_features = 15
 n_discrete_features = 15
 n_classes = 2
