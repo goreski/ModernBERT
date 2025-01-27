@@ -182,7 +182,7 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points:
     df['sentence'] = df.drop(columns=['label']).apply(lambda x: ' '.join([f"{val:.{decimal_points}f}" for val in x]), axis=1)
     
     # Create dummy sentence based on label if 1 than A1 if 0 than B0
-    df['sentence'] = df['label'].apply(lambda x: f"A{x}" if x == 1 else f"B{x}")
+    # df['sentence'] = df['label'].apply(lambda x: f"4.23245456345" if x == 1 else f"5.7655")
     
     df = df[['sentence', 'label']]
     df['idx'] = df.index
@@ -203,8 +203,27 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points:
         return_tensors='pt'
     )
 
-    # Print the first tokenized sentence
-    print(tokenized_dataset['input_ids'][0])
+    # Print input sentence and tokenization results
+    print("\nTokenizer Debug Info:")
+    print("-" * 50)
+    # Print first 3 examples
+    for i in range(min(3, len(df))):
+        print(f"\nExample {i+1}:")
+        print(f"Input sentence: {df['sentence'].iloc[i]}")
+        print(f"Label: {df['label'].iloc[i]}")
+        
+        # Get tokenized ids for this example
+        tokens = tokenizer.encode(df['sentence'].iloc[i])
+        print(f"Token IDs: {tokens}")
+        
+        # Decode back to string to verify tokenization
+        decoded = tokenizer.decode(tokens)
+        print(f"Decoded text: {decoded}")
+        
+        # Print individual tokens
+        tokens_list = tokenizer.convert_ids_to_tokens(tokens)
+        print(f"Individual tokens: {tokens_list}")
+    print("-" * 50)
 
     # Create a PyTorch dataset
     class CustomDataset(torch.utils.data.Dataset):

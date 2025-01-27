@@ -5,7 +5,7 @@
 
 # gpt2, prajjwal1/bert-tiny, bert-base-uncased, bert-base-cased, bert-base-multilingual-uncased, bert-base-multilingual-cased, bert-base-chinese, bert-base-german-cased, bert-base-dutch-cased, bert-base-finnish-cased-v1, bert-base-finnish-uncased-v1, bert-base-french, bert-base-italian-cased, bert-base-uncased-finetuned-sst-2-english, bert-base-uncased-finetuned-mrpc, bert-base-uncased-finetuned-rte, bert-base-uncased-finetuned-wsc, bert-base-uncased-finetuned-coqa, bert-base-uncased-finetuned-squad, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-finetuned-v1-rte, bert-base-uncased-finetuned-v1-wsc, bert-base-uncased-finetuned-v1-squad, bert-base-uncased-finetuned-v1-coqa, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-finetuned-v1-rte, bert-base-uncased-finetuned-v1-wsc, bert-base-uncased-finetuned-v1-squad, bert-base-uncased-finetuned-v1-coqa, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-finetuned-v1-rte, bert-base-uncased-finetuned-v1-wsc, bert-base-uncased-finetuned-v1-squad, bert-base-uncased-finetuned-v1-coqa, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-finetuned-v1-rte, bert-base-uncased-finetuned-v1-wsc, bert-base-uncased-finetuned-v1-squad, bert-base-uncased-finetuned-v1-coqa, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-finetuned-v1-rte, bert-base-uncased-finetuned-v1-wsc, bert-base-uncased-finetuned-v1-squad, bert-base-uncased-finetuned-v1-coqa, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-f 
 
-tokenizer_name: prajjwal1/bert-tiny
+tokenizer_name: bert-base-uncased
 max_seq_len: 128
 
 # Run Name
@@ -83,8 +83,8 @@ optimizer:
   weight_decay: 1.0e-6
 
 # Training duration and evaluation frequency
-max_duration: 2000ba
-eval_interval: 200ba
+max_duration: 100ba
+eval_interval: 10ba
 eval_subset_num_batches: 4 # For code testing, evaluate on a subset of 4 batches
 global_train_batch_size: 16
 
