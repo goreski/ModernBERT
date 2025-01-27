@@ -256,24 +256,6 @@ def build_model(cfg: DictConfig):
             tokenizer_name=cfg.get("tokenizer_name"),
             gradient_checkpointing=cfg.get("gradient_checkpointing"),
         )
-    elif cfg.name == "mosaic_bert":
-        model = mosaic_bert_module.create_mosaic_bert_classification(
-            num_labels=cfg.num_labels,
-            pretrained_model_name=cfg.pretrained_model_name,
-            pretrained_checkpoint=cfg.get("pretrained_checkpoint"),
-            model_config=cfg.get("model_config"),
-            tokenizer_name=cfg.get("tokenizer_name"),
-            gradient_checkpointing=cfg.get("gradient_checkpointing"),
-        )
-    elif cfg.name == "flex_bert":
-        model = flex_bert_module.create_flex_bert_classification(
-            num_labels=cfg.num_labels,
-            pretrained_model_name=cfg.pretrained_model_name,
-            pretrained_checkpoint=cfg.get("pretrained_checkpoint"),
-            model_config=cfg.get("model_config"),
-            tokenizer_name=cfg.get("tokenizer_name"),
-            gradient_checkpointing=cfg.get("gradient_checkpointing"),
-        )
     else:
         raise ValueError(f"Not sure how to build model with name={cfg.name}")
 
