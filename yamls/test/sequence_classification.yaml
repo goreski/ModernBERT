@@ -3,7 +3,7 @@
 #   `composer sequence_classification.py yamls/test/sequence_classification.yaml` (HuggingFace BERT)
 #   `composer sequence_classification.py yamls/test/sequence_classification.yaml model.name=mosaic_bert` (Mosaic BERT)
 
-# gpt2, prajjwal1/bert-tiny, bert-base-uncased, bert-base-cased, bert-base-multilingual-uncased, bert-base-multilingual-cased, bert-base-chinese, bert-base-german-cased, bert-base-dutch-cased, bert-base-finnish-cased-v1, bert-base-finnish-uncased-v1, bert-base-french, bert-base-italian-cased, bert-base-uncased-finetuned-sst-2-english, bert-base-uncased-finetuned-mrpc, bert-base-uncased-finetuned-rte, bert-base-uncased-finetuned-wsc, bert-base-uncased-finetuned-coqa, bert-base-uncased-finetuned-squad, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-finetuned-v1-rte, bert-base-uncased-finetuned-v1-wsc, bert-base-uncased-finetuned-v1-squad, bert-base-uncased-finetuned-v1-coqa, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-finetuned-v1-rte, bert-base-uncased-finetuned-v1-wsc, bert-base-uncased-finetuned-v1-squad, bert-base-uncased-finetuned-v1-coqa, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-finetuned-v1-rte, bert-base-uncased-finetuned-v1-wsc, bert-base-uncased-finetuned-v1-squad, bert-base-uncased-finetuned-v1-coqa, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-finetuned-v1-rte, bert-base-uncased-finetuned-v1-wsc, bert-base-uncased-finetuned-v1-squad, bert-base-uncased-finetuned-v1-coqa, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-finetuned-v1-rte, bert-base-uncased-finetuned-v1-wsc, bert-base-uncased-finetuned-v1-squad, bert-base-uncased-finetuned-v1-coqa, bert-base-uncased-finetuned-v1-mnli, bert-base-uncased-f 
+# prajjwal1/bert-tiny, bert-base-uncased, bert-base-uncased
 
 tokenizer_name: bert-base-uncased
 max_seq_len: 128
@@ -16,14 +16,15 @@ load_path: # (Optionally) provide a composer checkpoint to use for the starting 
 # Dataset
 dataset:
   n_samples: 10000
-  n_continuous_features: 20
+  n_continuous_features: 0
   n_discrete_features: 10
   n_classes: 2
   class_distribution: [0.5, 0.5]
   n_bins: 5
-  n_redundant: 5
-  n_noisy: 10
+  n_redundant: 0
+  n_noisy: 0
   class_sep: 0.1
+  textual_discrete: true
 
 # Model
 model:
@@ -49,6 +50,7 @@ train_loader:
   n_redundant: ${dataset.n_redundant}
   n_noisy: ${dataset.n_noisy}
   class_sep: ${dataset.class_sep}
+  textual_discrete: ${dataset.textual_discrete}
 
 eval_loader:
   split: validation
@@ -66,6 +68,7 @@ eval_loader:
   n_redundant: ${dataset.n_redundant}
   n_noisy: ${dataset.n_noisy}
   class_sep: ${dataset.class_sep}
+  textual_discrete: ${dataset.textual_discrete}
 
 # Optimization
 scheduler:
@@ -83,8 +86,8 @@ optimizer:
   weight_decay: 1.0e-6
 
 # Training duration and evaluation frequency
-max_duration: 100ba
-eval_interval: 10ba
+max_duration: 1000ba
+eval_interval: 100ba
 eval_subset_num_batches: 4 # For code testing, evaluate on a subset of 4 batches
 global_train_batch_size: 16
 

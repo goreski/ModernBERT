@@ -15,8 +15,59 @@ from torchmetrics.classification.accuracy import MulticlassAccuracy, MultilabelA
 from torchmetrics.classification.matthews_corrcoef import MatthewsCorrCoef
 from torchmetrics.regression.spearman import SpearmanCorrCoef
 
+import torch
+from transformers import BertConfig, BertForSequenceClassification
+from transformers.models.bert.modeling_bert import BertEmbeddings
+
 __all__ = ["create_hf_bert_mlm", "create_hf_bert_classification"]
 
+class CustomBertEmbeddings(BertEmbeddings):
+    def get_word_level_positions(self, input_ids, attention_mask):
+        """Generate position IDs where subwords from the same word share position."""
+        # Get the tokenizer
+        tokenizer = self.word_embeddings.tokenizer if hasattr(self.word_embeddings, 'tokenizer') else None
+        if tokenizer is None:
+            # Create default position IDs (0, 1, 2, 3, ...)
+            mask = attention_mask.long()
+            incremental_indices = torch.cumsum(mask, dim=1) * mask
+            return incremental_indices.long() - 1
+        
+        batch_size, seq_length = input_ids.shape
+        position_ids = torch.zeros_like(input_ids)
+        
+        for batch_idx in range(batch_size):
+            current_position = 0
+            for seq_idx in range(seq_length):
+                if attention_mask[batch_idx, seq_idx] == 0:
+                    # This is padding
+                    continue
+                    
+                token = input_ids[batch_idx, seq_idx].item()
+                token_str = tokenizer.convert_ids_to_tokens([token])[0]
+                
+                if seq_idx == 0 or token_str.startswith('##'):
+                    # If it's a continuation subword (starts with ##), use the same position
+                    position_ids[batch_idx, seq_idx] = current_position
+                else:
+                    # If it's a new word, increment position
+                    current_position += 1
+                    position_ids[batch_idx, seq_idx] = current_position
+        
+        return position_ids
+
+    def forward(self, input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None, past_key_values_length=0):
+        if position_ids is None and input_ids is not None:
+            # Create position_ids based on word-level positions
+            attention_mask = torch.ones_like(input_ids)
+            position_ids = self.get_word_level_positions(input_ids, attention_mask)
+        
+        return super().forward(
+            input_ids=input_ids,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            inputs_embeds=inputs_embeds,
+            past_key_values_length=past_key_values_length
+        )
 
 def create_hf_bert_mlm(
     pretrained_model_name: str = "bert-base-uncased",
@@ -224,6 +275,13 @@ def create_hf_bert_classification(
             auto_model_cls.from_config is not None
         ), f"{auto_model_cls.__name__} has from_config method"
         model = auto_model_cls.from_config(config)
+
+    # Replace the standard embeddings with our custom embeddings
+    custom_embeddings = CustomBertEmbeddings(model.config)
+    # Copy the original embeddings' weights
+    custom_embeddings.load_state_dict(model.bert.embeddings.state_dict())
+    # Replace the embeddings
+    model.bert.embeddings = custom_embeddings
 
     if gradient_checkpointing:
         model.gradient_checkpointing_enable()

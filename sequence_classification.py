@@ -174,13 +174,18 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points:
         n_redundant=cfg.get("n_redundant", 5),
         n_noisy=cfg.get("n_noisy", 20),
         class_sep=cfg.get("class_sep", 0.1),
+        textual_discrete=cfg.get("textual_discrete", False),
     )
 
     # Change structure to "sentence", "label" and "idx"
     # all columns except the last one are features and they are concatenated to form a sentence
     # the last column is the label
-    df['sentence'] = df.drop(columns=['label']).apply(lambda x: ' '.join([f"{val:.{decimal_points}f}" for val in x]), axis=1)
-    
+    textual_discrete = cfg.get("textual_discrete", False)
+    print(f"Textual discrete: {textual_discrete}")
+    if not textual_discrete:
+        df['sentence'] = df.drop(columns=['label']).apply(lambda x: ' '.join([f"{val:.{decimal_points}f}" for val in x]), axis=1)
+    else:
+        df['sentence'] = df.drop(columns=['label']).apply(lambda x: ' '.join([str(val) for val in x]), axis=1)
     # Create dummy sentence based on label if 1 than A1 if 0 than B0
     # df['sentence'] = df['label'].apply(lambda x: f"4.23245456345" if x == 1 else f"5.7655")
     
@@ -256,17 +261,16 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points:
 
     return dataloader
 
-def build_model(cfg: DictConfig):
-    # Get tokenizer first to set up padding token
-    tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.tokenizer_name)
-    
-    # Add padding token to tokenizer if it doesn't exist
-    if tokenizer.pad_token is None:
-        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-        tokenizer.pad_token_id = tokenizer.eos_token_id  # Use EOS token as padding token for GPT-2
+from transformers import BertTokenizerFast
+def get_tokenizer(tokenizer_name: str):
+    # Initialize the tokenizer with whole word masking
+    tokenizer = BertTokenizerFast.from_pretrained(tokenizer_name, do_basic_tokenize=False)
+    return tokenizer
 
+def build_model(cfg: DictConfig):
     # Note: cfg.num_labels should match the number of classes in your dataset!
     if cfg.name == "hf_bert":
+        tokenizer = get_tokenizer(cfg.tokenizer_name)
         model = hf_bert_module.create_hf_bert_classification(
             num_labels=cfg.num_labels,
             pretrained_model_name=cfg.pretrained_model_name,
@@ -277,14 +281,6 @@ def build_model(cfg: DictConfig):
         )
     else:
         raise ValueError(f"Not sure how to build model with name={cfg.name}")
-
-    # Set the pad_token_id in the model configuration if using GPT-2
-    if cfg.tokenizer_name == "gpt2":
-        model.config.pad_token_id = tokenizer.pad_token_id
-        model.model.config.pad_token_id = tokenizer.pad_token_id
-        # Resize model embeddings to match tokenizer
-        model.model.resize_token_embeddings(len(tokenizer))
-
     return model
 
 def train(cfg: DictConfig, return_trainer: bool = False, do_train: bool = True) -> Optional[Trainer]:
