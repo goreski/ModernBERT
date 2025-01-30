@@ -15,17 +15,18 @@ from generate_dataset import generate_synthetic_dataset
 wandb.init(project="nn_classification")
 
 # Generate the dataset
-n_samples = 100
-n_continuous_features = 15
-n_discrete_features = 15
+n_samples = 10000
+n_continuous_features = 0
+n_discrete_features = 10
 n_classes = 2
-class_distribution = [0.8, 0.2]
-n_bins = 10
-n_redundant = 5
-n_noisy = 20
+class_distribution = [0.5, 0.5]
+n_bins = 5
+n_redundant = 0
+n_noisy = 0
 class_sep = 0.1
+textual_discrete = False
 
-df = generate_synthetic_dataset(n_samples, n_continuous_features, n_discrete_features, n_classes, class_distribution, n_bins, n_redundant, n_noisy, class_sep)
+df = generate_synthetic_dataset(n_samples, n_continuous_features, n_discrete_features, n_classes, class_distribution, textual_discrete, n_bins, n_redundant, n_noisy, class_sep)
 
 # Split the dataset into train, validation, and test sets
 train_df, temp_df = train_test_split(df, test_size=0.3, stratify=df['label'], random_state=42)
@@ -117,7 +118,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
         print(f"Epoch {epoch + 1}/{num_epochs}, Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}, Val Accuracy: {val_accuracy:.4f}, Val F1: {val_f1:.4f}, Val AUC: {val_auc:.4f}")
 
 # Train the model
-train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=20)
+train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=100)
 
 # Evaluate the model on the test set
 model.eval()

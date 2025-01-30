@@ -24,7 +24,7 @@ dataset:
   n_redundant: 0
   n_noisy: 0
   class_sep: 0.1
-  textual_discrete: true
+  textual_discrete: false
 
 # Model
 model:
@@ -86,8 +86,8 @@ optimizer:
   weight_decay: 1.0e-6
 
 # Training duration and evaluation frequency
-max_duration: 1000ba
-eval_interval: 100ba
+max_duration: 10000ba
+eval_interval: 1000ba
 eval_subset_num_batches: 4 # For code testing, evaluate on a subset of 4 batches
 global_train_batch_size: 16
 

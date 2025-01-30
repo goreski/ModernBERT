@@ -150,7 +150,7 @@ def build_optimizer(cfg, model):
         raise ValueError(f"Not sure how to build optimizer: {cfg.name}")
 
 
-def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points: int = 7):
+def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points: int = 0):
     """Create a dataloader for classification using synthetically generated data.
 
     Args:
@@ -187,7 +187,7 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points:
     else:
         df['sentence'] = df.drop(columns=['label']).apply(lambda x: ' '.join([str(val) for val in x]), axis=1)
     # Create dummy sentence based on label if 1 than A1 if 0 than B0
-    # df['sentence'] = df['label'].apply(lambda x: f"4.23245456345" if x == 1 else f"5.7655")
+    #df['sentence'] = df['label'].apply(lambda x: f"4.23245456345" if x == 1 else f"5.7655")
     
     df = df[['sentence', 'label']]
     df['idx'] = df.index
@@ -273,8 +273,8 @@ def build_model(cfg: DictConfig):
         tokenizer = get_tokenizer(cfg.tokenizer_name)
         model = hf_bert_module.create_hf_bert_classification(
             num_labels=cfg.num_labels,
-            pretrained_model_name=cfg.pretrained_model_name,
-            use_pretrained=cfg.get("use_pretrained", False),
+            pretrained_model_name=False,
+            use_pretrained=False,
             model_config=cfg.get("model_config"),
             tokenizer_name=cfg.get("tokenizer_name"),
             gradient_checkpointing=cfg.get("gradient_checkpointing"),
