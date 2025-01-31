@@ -190,12 +190,14 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points:
     # Create dummy sentence based on label if 1 than A1 if 0 than B0
     #df['sentence'] = df['label'].apply(lambda x: f"4.23245456345" if x == 1 else f"5.7655")
 
+    print(df.shape)
+
     # Function for textual transformation if only discrete features are used then use different numbers for binary encoding of each feature
     # first feature shuld have suffix A, second B, third C, etc.
     def transform_textual_discrete(x):
         return ' '.join([f"{chr(65 + i)}{val}" for i, val in enumerate(x)])
     
-    if cfg.get("n_continuous_features", 15) == 0:
+    if cfg.get("n_continuous_features", 0) == 0:
         df['sentence'] = df.drop(columns=['label']).apply(transform_textual_discrete, axis=1)
 
 
