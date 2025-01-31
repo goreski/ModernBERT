@@ -182,16 +182,27 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points:
     # the last column is the label
     textual_discrete = cfg.get("textual_discrete", False)
     print(f"Textual discrete: {textual_discrete}")
+    print("Shape: ", df.shape)
     if not textual_discrete:
         df['sentence'] = df.drop(columns=['label']).apply(lambda x: ' '.join([f"{val:.{decimal_points}f}" for val in x]), axis=1)
     else:
         df['sentence'] = df.drop(columns=['label']).apply(lambda x: ' '.join([str(val) for val in x]), axis=1)
     # Create dummy sentence based on label if 1 than A1 if 0 than B0
     #df['sentence'] = df['label'].apply(lambda x: f"4.23245456345" if x == 1 else f"5.7655")
+
+    # Function for textual transformation if only discrete features are used then use different numbers for binary encoding of each feature
+    # first feature shuld have suffix A, second B, third C, etc.
+    def transform_textual_discrete(x):
+        return ' '.join([f"{chr(65 + i)}{val}" for i, val in enumerate(x)])
+    
+    if cfg.get("n_continuous_features", 15) == 0:
+        df['sentence'] = df.drop(columns=['label']).apply(transform_textual_discrete, axis=1)
+
+
     
     df = df[['sentence', 'label']]
     df['idx'] = df.index
-
+    
     # Tokenize the dataset
     tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.tokenizer_name)
     
@@ -270,13 +281,12 @@ def get_tokenizer(tokenizer_name: str):
 def build_model(cfg: DictConfig):
     # Note: cfg.num_labels should match the number of classes in your dataset!
     if cfg.name == "hf_bert":
-        tokenizer = get_tokenizer(cfg.tokenizer_name)
         model = hf_bert_module.create_hf_bert_classification(
             num_labels=cfg.num_labels,
-            pretrained_model_name=False,
+            pretrained_model_name=cfg.get("pretrained_model_name", "bert-base-uncased"),
             use_pretrained=False,
             model_config=cfg.get("model_config"),
-            tokenizer_name=cfg.get("tokenizer_name"),
+            tokenizer_name=False,
             gradient_checkpointing=cfg.get("gradient_checkpointing"),
         )
     else:

@@ -3,9 +3,9 @@
 #   `composer sequence_classification.py yamls/test/sequence_classification.yaml` (HuggingFace BERT)
 #   `composer sequence_classification.py yamls/test/sequence_classification.yaml model.name=mosaic_bert` (Mosaic BERT)
 
-# prajjwal1/bert-tiny, bert-base-uncased, bert-base-uncased
+# prajjwal1/bert-tiny, bert-base-uncased
 
-tokenizer_name: bert-base-uncased
+tokenizer_name: prajjwal1/bert-tiny
 max_seq_len: 128
 
 # Run Name
@@ -15,7 +15,7 @@ load_path: # (Optionally) provide a composer checkpoint to use for the starting 
 
 # Dataset
 dataset:
-  n_samples: 10000
+  n_samples: 1000
   n_continuous_features: 0
   n_discrete_features: 10
   n_classes: 2
@@ -78,18 +78,21 @@ scheduler:
 
 optimizer:
   name: decoupled_adamw
-  lr: 1.0e-5
+  lr: 5.0e-6
   betas:
   - 0.9
   - 0.98
   eps: 1.0e-06
-  weight_decay: 1.0e-6
+  weight_decay: 1.0e-5
+
+# Gradient Clipping
+gradient_clipping: 1.0  # Clip gradients at 1.0
 
 # Training duration and evaluation frequency
 max_duration: 10000ba
 eval_interval: 1000ba
 eval_subset_num_batches: 4 # For code testing, evaluate on a subset of 4 batches
-global_train_batch_size: 16
+global_train_batch_size: 64
 
 # System
 seed: 17
