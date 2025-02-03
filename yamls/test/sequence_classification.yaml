@@ -15,15 +15,15 @@ load_path: # (Optionally) provide a composer checkpoint to use for the starting 
 
 # Dataset
 dataset:
-  n_samples: 1000
+  n_samples: 2000
   n_continuous_features: 0
-  n_discrete_features: 10
+  n_discrete_features: 8
   n_classes: 2
   class_distribution: [0.5, 0.5]
-  n_bins: 5
+  n_bins: 2
   n_redundant: 0
   n_noisy: 0
-  class_sep: 0.1
+  class_sep: 1
   textual_discrete: false
 
 # Model
@@ -74,25 +74,25 @@ eval_loader:
 scheduler:
   name: linear_decay_with_warmup
   t_warmup: 0.06dur # Warmup to the full LR for 6% of the training duration
-  alpha_f: 0.02 # Linearly decay to 0.02x the full LR by the end of the training duration
+  alpha_f: 0.06 # Linearly decay to 0.02x the full LR by the end of the training duration
 
 optimizer:
   name: decoupled_adamw
-  lr: 5.0e-6
+  lr: 1.0e-3
   betas:
   - 0.9
   - 0.98
-  eps: 1.0e-06
-  weight_decay: 1.0e-5
+  eps: 1.0e-05
+  weight_decay: 1.0e-2
 
 # Gradient Clipping
 gradient_clipping: 1.0  # Clip gradients at 1.0
 
 # Training duration and evaluation frequency
 max_duration: 10000ba
-eval_interval: 1000ba
-eval_subset_num_batches: 4 # For code testing, evaluate on a subset of 4 batches
-global_train_batch_size: 64
+eval_interval: 10ba
+eval_subset_num_batches: 8 # For code testing, evaluate on a subset of 4 batches
+global_train_batch_size: 512
 
 # System
 seed: 17

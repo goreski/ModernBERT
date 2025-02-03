@@ -5,6 +5,64 @@ from sklearn.datasets import make_classification
 from sklearn.preprocessing import KBinsDiscretizer
 from typing import List, Tuple
 
+import string
+import itertools
+
+def create_extended_letter_mapping(df, label_column):
+    """
+    Create a mapping from integer values to unique letters for discrete features only.
+    
+    Args:
+        df (pd.DataFrame): The input dataframe.
+        label_column (str): The name of the label column.
+    
+    Returns:
+        dict: A dictionary where keys are column names and values are mappings from integers to unique letters.
+    """
+    letter_mapping = {}
+    letters = string.ascii_uppercase  # Use uppercase letters A-Z
+    
+    # Generate combinations of letters (e.g., A, B, ..., Z, AA, AB, ..., ZZ, AAA, AAB, ...)
+    max_length = 3  # Adjust this value if needed to handle more unique values
+    extended_letters = [''.join(comb) for comb in itertools.chain.from_iterable(itertools.product(letters, repeat=i) for i in range(1, max_length + 1))]
+    
+    letter_index = 0  # To keep track of the starting index for each column's unique letters
+    
+    for col in df.columns:
+        # Skip continuous features and label column
+        if col == label_column or 'continuous' in col:
+            continue
+            
+        unique_values = df[col].unique()
+        if len(unique_values) > len(extended_letters) - letter_index:
+            raise ValueError(f"Too many unique values in column {col} to map to extended letters.")
+        
+        # Assign a unique subset of letters to this column
+        column_letters = extended_letters[letter_index:letter_index + len(unique_values)]
+        mapping = {val: column_letters[i] for i, val in enumerate(unique_values)}
+        letter_mapping[col] = mapping
+        letter_index += len(unique_values)
+    
+    return letter_mapping
+
+def transform_discrete_to_letters(df, letter_mapping):
+    """
+    Transform discrete features from integer encoding to letter encoding, excluding the label column.
+    
+    Args:
+        df (pd.DataFrame): The input dataframe.
+        letter_mapping (dict): The mapping from integers to letters for each column.
+    
+    Returns:
+        pd.DataFrame: The transformed dataframe.
+    """
+    df_transformed = df.copy()
+    
+    for col, mapping in letter_mapping.items():
+        df_transformed[col] = df_transformed[col].map(mapping)
+    
+    return df_transformed
+
 def get_word_list(min_length: int = 6) -> List[str]:
     """Get list of words from MIT wordlist."""
     word_site = "https://www.mit.edu/~ecprice/wordlist.10000"

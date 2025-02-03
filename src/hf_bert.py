@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from typing import Optional
+from torch import nn
 
 from composer.metrics.nlp import BinaryF1Score, LanguageCrossEntropy, MaskedAccuracy
 from composer.models.huggingface import HuggingFaceModel
@@ -16,58 +17,56 @@ from torchmetrics.classification.matthews_corrcoef import MatthewsCorrCoef
 from torchmetrics.regression.spearman import SpearmanCorrCoef
 
 import torch
-from transformers import BertConfig, BertForSequenceClassification
+from transformers import BertConfig, BertForSequenceClassification, BertTokenizerFast
 from transformers.models.bert.modeling_bert import BertEmbeddings
 
 __all__ = ["create_hf_bert_mlm", "create_hf_bert_classification"]
 
 class CustomBertEmbeddings(BertEmbeddings):
-    def get_word_level_positions(self, input_ids, attention_mask):
-        """Generate position IDs where subwords from the same word share position."""
-        # Get the tokenizer
-        tokenizer = self.word_embeddings.tokenizer if hasattr(self.word_embeddings, 'tokenizer') else None
-        if tokenizer is None:
-            # Create default position IDs (0, 1, 2, 3, ...)
-            mask = attention_mask.long()
-            incremental_indices = torch.cumsum(mask, dim=1) * mask
-            return incremental_indices.long() - 1
-        
-        batch_size, seq_length = input_ids.shape
-        position_ids = torch.zeros_like(input_ids)
-        
-        for batch_idx in range(batch_size):
-            current_position = 0
-            for seq_idx in range(seq_length):
-                if attention_mask[batch_idx, seq_idx] == 0:
-                    # This is padding
-                    continue
-                    
-                token = input_ids[batch_idx, seq_idx].item()
-                token_str = tokenizer.convert_ids_to_tokens([token])[0]
-                
-                if seq_idx == 0 or token_str.startswith('##'):
-                    # If it's a continuation subword (starts with ##), use the same position
-                    position_ids[batch_idx, seq_idx] = current_position
-                else:
-                    # If it's a new word, increment position
-                    current_position += 1
-                    position_ids[batch_idx, seq_idx] = current_position
-        
-        return position_ids
+    def __init__(self, config, tokenizer):
+        super().__init__(config)
+        self.tokenizer = tokenizer
 
     def forward(self, input_ids=None, token_type_ids=None, position_ids=None, inputs_embeds=None, past_key_values_length=0):
-        if position_ids is None and input_ids is not None:
-            # Create position_ids based on word-level positions
-            attention_mask = torch.ones_like(input_ids)
-            position_ids = self.get_word_level_positions(input_ids, attention_mask)
+        if inputs_embeds is None:
+            if input_ids is None:
+                raise ValueError("You have to specify either input_ids or inputs_embeds")
+            inputs_embeds = self.word_embeddings(input_ids)
         
-        return super().forward(
-            input_ids=input_ids,
-            token_type_ids=token_type_ids,
-            position_ids=position_ids,
-            inputs_embeds=inputs_embeds,
-            past_key_values_length=past_key_values_length
-        )
+        if position_ids is None:
+            position_ids = self.create_position_ids(input_ids)
+        
+        if token_type_ids is None:
+            token_type_ids = torch.zeros_like(input_ids)
+
+        position_embeds = self.position_embeddings(position_ids + past_key_values_length)
+        token_type_embeds = self.token_type_embeddings(token_type_ids)
+
+        embeddings = inputs_embeds + position_embeds + token_type_embeds
+        embeddings = self.LayerNorm(embeddings)
+        embeddings = self.dropout(embeddings)
+
+        return embeddings
+
+    def create_position_ids(self, input_ids):
+        # Keep your custom position ID logic here
+        position_ids = torch.zeros_like(input_ids, dtype=torch.long)
+        
+        for i, input_id in enumerate(input_ids):
+            tokens = self.tokenizer.convert_ids_to_tokens(input_id)
+            current_position = 1
+            for j, token in enumerate(tokens):
+                if token == '[CLS]':
+                    position_ids[i, j] = 0
+                elif token == '[SEP]':
+                    position_ids[i, j] = current_position
+                elif token.startswith("##"):
+                    position_ids[i, j] = current_position - 1
+                else:
+                    position_ids[i, j] = current_position
+                    current_position += 1
+        
+        return position_ids
 
 def create_hf_bert_mlm(
     pretrained_model_name: str = "bert-base-uncased",
@@ -277,20 +276,19 @@ def create_hf_bert_classification(
         model = auto_model_cls.from_config(config)
 
     # Replace the standard embeddings with our custom embeddings
-    custom_embeddings = CustomBertEmbeddings(model.config)
-    # Copy the original embeddings' weights
-    custom_embeddings.load_state_dict(model.bert.embeddings.state_dict())
-    # Replace the embeddings
+        # setup the tokenizer
+    if tokenizer_name:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name)
+    else:
+        tokenizer = transformers.AutoTokenizer.from_pretrained("bert-base-uncased")
+
+    custom_embeddings = CustomBertEmbeddings(model.config, tokenizer)
+
+    print("Replacing embeddings")
     model.bert.embeddings = custom_embeddings
 
     if gradient_checkpointing:
         model.gradient_checkpointing_enable()
-
-    # setup the tokenizer
-    if tokenizer_name:
-        tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_name)
-    else:
-        tokenizer = None
 
     if num_labels == 1:
         # Metrics for a regression model

@@ -14,6 +14,7 @@ import src.evals.data as data_module
 import src.hf_bert as hf_bert_module
 import src.mosaic_bert as mosaic_bert_module
 import src.flex_bert as flex_bert_module
+from src.hf_bert import CustomBertEmbeddings
 import transformers
 from composer import Trainer, algorithms, Evaluator
 from composer.callbacks import LRMonitor, MemoryMonitor, OptimizerMonitor, RuntimeEstimator, SpeedMonitor
@@ -32,9 +33,10 @@ from omegaconf import OmegaConf as om
 from torch.utils.data import DataLoader
 import torch
 import pandas as pd
+from transformers import BertConfig
 
 # Import the synthetic data generation function
-from generate_dataset import generate_synthetic_dataset
+from generate_dataset import generate_synthetic_dataset, create_extended_letter_mapping, transform_discrete_to_letters
 
 def update_batch_size_info(cfg: DictConfig):
     global_batch_size, device_microbatch_size = cfg.global_train_batch_size, cfg.device_train_microbatch_size
@@ -150,7 +152,7 @@ def build_optimizer(cfg, model):
         raise ValueError(f"Not sure how to build optimizer: {cfg.name}")
 
 
-def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points: int = 0):
+def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points: int = 0, save_data: bool = False):
     """Create a dataloader for classification using synthetically generated data.
 
     Args:
@@ -177,41 +179,39 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points:
         textual_discrete=cfg.get("textual_discrete", False),
     )
 
-    # Change structure to "sentence", "label" and "idx"
-    # all columns except the last one are features and they are concatenated to form a sentence
-    # the last column is the label
-    textual_discrete = cfg.get("textual_discrete", False)
-    print(f"Textual discrete: {textual_discrete}")
-    print("Shape: ", df.shape)
-    if not textual_discrete:
-        df['sentence'] = df.drop(columns=['label']).apply(lambda x: ' '.join([f"{val:.{decimal_points}f}" for val in x]), axis=1)
-    else:
-        df['sentence'] = df.drop(columns=['label']).apply(lambda x: ' '.join([str(val) for val in x]), axis=1)
-    # Create dummy sentence based on label if 1 than A1 if 0 than B0
-    #df['sentence'] = df['label'].apply(lambda x: f"4.23245456345" if x == 1 else f"5.7655")
+    # Define the label column
+    label_column = 'label'
 
     print(df.shape)
 
-    # Function for textual transformation if only discrete features are used then use different numbers for binary encoding of each feature
-    # first feature shuld have suffix A, second B, third C, etc.
-    def transform_textual_discrete(x):
-        return ' '.join([f"{chr(65 + i)}{val}" for i, val in enumerate(x)])
-    
-    if cfg.get("n_continuous_features", 0) == 0:
-        df['sentence'] = df.drop(columns=['label']).apply(transform_textual_discrete, axis=1)
+    # Create extended letter mapping for all columns except the label column
+    letter_mapping = create_extended_letter_mapping(df, label_column)
 
+    # Transform all columns to letter encoding except the label column
+    df_transformed = transform_discrete_to_letters(df.drop(columns=[label_column]), letter_mapping)
 
+    # Add the label column back to the transformed dataframe
+    df_transformed[label_column] = df[label_column]
+
+    # Change structure to "sentence", "label" and "idx"
+    # All columns except the last one are features and they are concatenated to form a sentence
+    # The last column is the label
+    df_transformed['sentence'] = df_transformed.drop(columns=[label_column]).apply(lambda x: ' '.join([str(val) for val in x]), axis=1)
+    # Remove spaces from the sentence
+    df_transformed['sentence'] = df_transformed['sentence'].str.replace(' ', '')
+
+    # Put sentenct equal a if the label is 0 and b if the label is 1
+    #df_transformed['sentence'] = df_transformed.apply(lambda x: 'Abrakadabra' if x[label_column] == 0 else 'Abrakababra', axis=1)
+
+    # Reorder columns and add index
+    df = df_transformed[['sentence', label_column]]
+    df['idx'] = df_transformed.index
     
-    df = df[['sentence', 'label']]
-    df['idx'] = df.index
+    #df = df[['sentence', 'label']]
+    #df['idx'] = df.index
     
     # Tokenize the dataset
     tokenizer = transformers.AutoTokenizer.from_pretrained(cfg.tokenizer_name)
-    
-    # Add a padding token if it doesn't already exist
-    if tokenizer.pad_token is None:
-        tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-        tokenizer.pad_token_id = tokenizer.eos_token_id  # Use EOS token as padding token for GPT-2
 
     tokenized_dataset = tokenizer(
         df['sentence'].tolist(),  # Ensure this is a list of strings
@@ -272,6 +272,11 @@ def build_my_dataloader(cfg: DictConfig, device_batch_size: int, decimal_points:
         timeout=cfg.get("timeout", 0),
     )
 
+    # Save the data if requested
+    if save_data:
+        # Save the dataset
+        df.to_csv('synthetic_dataset.csv', index=False)
+
     return dataloader
 
 from transformers import BertTokenizerFast
@@ -314,7 +319,9 @@ def train(cfg: DictConfig, return_trainer: bool = False, do_train: bool = True) 
     train_loader = build_my_dataloader(
         cfg.train_loader,
         cfg.global_train_batch_size // dist.get_world_size(),
+        save_data=True
     )
+
     print("Building eval loader...")
     global_eval_batch_size = cfg.get("global_eval_batch_size", cfg.global_train_batch_size)
     eval_loader = build_my_dataloader(
